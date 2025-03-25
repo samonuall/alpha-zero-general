@@ -11,6 +11,10 @@ from tqdm import tqdm
 from Arena import Arena
 from MCTS import MCTS
 
+import multiprocessing as mp
+import os
+from concurrent.futures import ProcessPoolExecutor
+
 log = logging.getLogger(__name__)
 
 
@@ -77,16 +81,36 @@ class Coach():
         only if it wins >= updateThreshold fraction of games.
         """
 
+        NUM_PROCESSES = min(30, mp.cpu_count())
+        log.info(f'Using {NUM_PROCESSES} processes')
+        
         for i in range(1, self.args.numIters + 1):
             # bookkeeping
             log.info(f'Starting Iter #{i} ...')
             # examples of the iteration
             if not self.skipFirstSelfPlay or i > 1:
-                iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
+                # Save current model for workers to load
+                self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='iter_model.pth.tar')
 
-                for _ in tqdm(range(self.args.numEps), desc="Self Play"):
-                    self.mcts = MCTS(self.game, self.nnet, self.args)  # reset search tree
-                    iterationTrainExamples += self.executeEpisode()
+                # Calculate episodes per worker
+                eps_per_worker = [self.args.numEps // NUM_PROCESSES + (1 if j < self.args.numEps % NUM_PROCESSES else 0) 
+                             for j in range(NUM_PROCESSES)]
+                
+                # Create workers
+                iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
+                with ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
+
+                    # define call to worker function
+                    f = lambda num_eps: executor.submit(self.worker_func, 
+                                               num_eps, 
+                                               self.game, 
+                                               os.path.join(self.args.checkpoint, 'iter_model.pth.tar'),
+                                               self.nnet.__class__,
+                                               self.args)
+                    
+                    futures = [f(num_eps) for num_eps in eps_per_worker]
+                    for future in futures:
+                        iterationTrainExamples.extend(future.result())
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -127,6 +151,50 @@ class Coach():
                 self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
                 self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
 
+    @staticmethod
+    def worker_func(num_eps, game, checkpoint_path, nnet_class, args):
+        # set random seed so that each process will have different results
+        np.random.seed(os.getpid())
+        
+        # Initialize network and MCTS
+        nnet = nnet_class(game)
+        nnet.load_checkpoint(folder=os.path.dirname(checkpoint_path), 
+                            filename=os.path.basename(checkpoint_path))
+        mcts = MCTS(game, nnet, args)
+
+        # Collect examples from all episodes
+        all_examples = []
+
+        for _ in range(num_eps):
+            # Execute a single episode
+            episode_examples = []
+            board = game.getInitBoard()
+            curPlayer = 1
+            episodeStep = 0
+            
+            while True:
+                episodeStep += 1
+                canonicalBoard = game.getCanonicalForm(board, curPlayer)
+                temp = int(episodeStep < args.tempThreshold)
+                
+                pi = mcts.getActionProb(canonicalBoard, temp=temp)
+                sym = game.getSymmetries(canonicalBoard, pi)
+                
+                for b, p in sym:
+                    episode_examples.append([b, curPlayer, p, None])
+                    
+                action = np.random.choice(len(pi), p=pi)
+                board, curPlayer = game.getNextState(board, curPlayer, action)
+                
+                r = game.getGameEnded(board, curPlayer)
+                if r != 0:
+                    # Process end-of-game results
+                    processed = [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in episode_examples]
+                    all_examples.extend(processed)
+                    break
+                    
+        return all_examples
+    
     def getCheckpointFile(self, iteration):
         return 'checkpoint_' + str(iteration) + '.pth.tar'
 

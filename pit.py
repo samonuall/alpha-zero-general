@@ -14,7 +14,7 @@ any agent.
 """
 
 mini_othello = False  # Play in 6x6 instead of the normal 8x8.
-human_vs_cpu = True
+human_vs_cpu = False
 
 if mini_othello:
     g = OthelloGame(6)
