@@ -13,7 +13,7 @@ from MCTS import MCTS
 
 import multiprocessing as mp
 import os
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class Coach():
         only if it wins >= updateThreshold fraction of games.
         """
 
-        NUM_PROCESSES = min(30, mp.cpu_count())
+        NUM_PROCESSES = min(30, mp.cpu_count() - 2)
         log.info(f'Using {NUM_PROCESSES} processes')
         
         for i in range(1, self.args.numIters + 1):
@@ -101,15 +101,16 @@ class Coach():
                 with ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
 
                     # define call to worker function
-                    f = lambda num_eps: executor.submit(self.worker_func, 
+                    f = lambda num_eps, id: executor.submit(self.worker_func, 
                                                num_eps, 
                                                self.game, 
                                                os.path.join(self.args.checkpoint, 'iter_model.pth.tar'),
                                                self.nnet.__class__,
-                                               self.args)
+                                               self.args,
+                                               id)
                     
-                    futures = [f(num_eps) for num_eps in eps_per_worker]
-                    for future in futures:
+                    futures = [f(num_eps, id) for id, num_eps in enumerate(eps_per_worker)]
+                    for future in as_completed(futures):
                         iterationTrainExamples.extend(future.result())
 
                 # save the iteration examples to the history 
@@ -152,7 +153,7 @@ class Coach():
                 self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
 
     @staticmethod
-    def worker_func(num_eps, game, checkpoint_path, nnet_class, args):
+    def worker_func(num_eps, game, checkpoint_path, nnet_class, args, id):
         # set random seed so that each process will have different results
         np.random.seed(os.getpid())
         
@@ -165,7 +166,7 @@ class Coach():
         # Collect examples from all episodes
         all_examples = []
 
-        for _ in range(num_eps):
+        for _ in tqdm(range(num_eps), position=id):
             # Execute a single episode
             episode_examples = []
             board = game.getInitBoard()
