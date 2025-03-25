@@ -81,7 +81,8 @@ class Coach():
         only if it wins >= updateThreshold fraction of games.
         """
 
-        NUM_PROCESSES = min(30, mp.cpu_count() - 2)
+        # take away 4 because of other processes happening
+        NUM_PROCESSES = mp.cpu_count() - 4
         log.info(f'Using {NUM_PROCESSES} processes')
         
         for i in range(1, self.args.numIters + 1):
@@ -157,16 +158,18 @@ class Coach():
         # set random seed so that each process will have different results
         np.random.seed(os.getpid())
         
-        # Initialize network and MCTS
+        # Initialize network
         nnet = nnet_class(game)
         nnet.load_checkpoint(folder=os.path.dirname(checkpoint_path), 
                             filename=os.path.basename(checkpoint_path))
-        mcts = MCTS(game, nnet, args)
 
         # Collect examples from all episodes
         all_examples = []
 
         for _ in tqdm(range(num_eps), position=id):
+            # reset tree
+            mcts = MCTS(game, nnet, args)
+
             # Execute a single episode
             episode_examples = []
             board = game.getInitBoard()
