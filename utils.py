@@ -31,7 +31,7 @@ class dotdict(dict):
 
 
 
-def upload_file_to_hf(path):
+def upload_file_to_hf(path, name_in_hub):
     """
     Upload a model file to Hugging Face Hub with error handling and logging.
     
@@ -74,7 +74,7 @@ def upload_file_to_hf(path):
         api = HfApi()
         api.upload_file(
             path_or_fileobj=path,
-            path_in_repo=path.split("/")[-1],
+            path_in_repo=name_in_hub,
             repo_id=repo_id,
             repo_type=repo_type
         )
@@ -155,4 +155,4 @@ def get_new_model(model_path, hub_path):
     
 
 if __name__ == "__main__":
-    upload_file_to_hf("new_model.pth.tar")
+    upload_file_to_hf("new_model.pth.tar", "thingy.pth.tar")

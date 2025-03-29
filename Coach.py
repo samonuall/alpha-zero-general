@@ -156,7 +156,7 @@ class Coach():
                 utils.upload_file_to_hf(self.args.checkpoint + "temp.pth.tar")
 
                 # wait until new model is available
-                if utils.get_new_model(f"{self.args.checkpoint}temp.pth.tar", "new_model.pth.tar"):
+                if utils.get_new_model(self.args.checkpoint, "new_model.pth.tar"):
                     log.info("New model available, loading it...")
                     self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
                 else:
