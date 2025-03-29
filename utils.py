@@ -104,7 +104,7 @@ def _get_new_model(logger, model_path, hub_path):
         login()
     
     # Ensure directory exists
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    # os.makedirs(os.path.dirname(model_path), exist_ok=True)
     
     try:
         # Download the model
