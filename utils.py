@@ -31,7 +31,7 @@ class dotdict(dict):
 
 
 
-def upload_model_to_hf(path_in_repo, model_path="temp/iter_model.pth.tar"):
+def upload_file_to_hf(path):
     """
     Upload a model file to Hugging Face Hub with error handling and logging.
     
@@ -66,15 +66,15 @@ def upload_model_to_hf(path_in_repo, model_path="temp/iter_model.pth.tar"):
             login()
         
         # Check if model file exists
-        if not os.path.exists(model_path):
-            logger.error(f"Model file not found at {model_path}")
+        if not os.path.exists(path):
+            logger.error(f"Model file not found at {path}")
             return False
             
-        logger.info(f"Uploading model from {model_path} to {repo_id}")
+        logger.info(f"Uploading model from {path} to {repo_id}")
         api = HfApi()
         api.upload_file(
-            path_or_fileobj=model_path,
-            path_in_repo=path_in_repo,
+            path_or_fileobj=path,
+            path_in_repo=path.split("/")[-1],
             repo_id=repo_id,
             repo_type=repo_type
         )
@@ -87,20 +87,9 @@ def upload_model_to_hf(path_in_repo, model_path="temp/iter_model.pth.tar"):
     
 
 
-def _get_new_model(id, logger, model_path="temp/iter_model.pth.tar"):
-    """
-    Download a model file from Hugging Face Hub with error handling and logging.
-    
-    Args:
-        id: Identifier for logging
-        model_path: Path where to save the downloaded model
-        repo_id: Hugging Face repository ID
-        path_in_repo: Path to the file in the repository
-        repo_type: Repository type (model, dataset, etc.)
-    
-    Returns:
-        bool: True if download successful, False otherwise
-    """
+def _get_new_model(logger, model_path, hub_path):
+    # Download new_model.pth.tar from hub and store in model_path
+    # Returns true/false based on success
     
     repo_id = "samonuall/alpha-poker"
     repo_type = "model"
@@ -119,28 +108,21 @@ def _get_new_model(id, logger, model_path="temp/iter_model.pth.tar"):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         
         # Download the model
-        new_model_path =  f"samonuall/alpha-poker{id+1}.pth.tar"
-        logger.info(f"Downloading model from {repo_id}/{new_model_path} to {model_path}")
+        logger.info(f"Downloading model from {repo_id}/new_model to {model_path}")
         api = HfApi()
         hf_hub_download(
             repo_id=repo_id,
-            filename=new_model_path,
+            filename=hub_path,
             repo_type=repo_type,
             local_dir=os.path.dirname(model_path)
         )
-        
-        # Rename downloaded file if needed
-        downloaded_path = os.path.join(os.path.dirname(model_path), new_model_path)
-        if downloaded_path != model_path and os.path.exists(downloaded_path):
-            os.rename(downloaded_path, model_path)
             
         logger.info("✅ Model downloaded successfully!")
         
         # Delete the model from the repository
-        old_model_path = f"samonuall/alpha-poker{id}.pth.tar"
-        logger.info(f"Deleting model {old_model_path} from repository {repo_id}")
+        logger.info(f"Deleting model from repository {repo_id}")
         api.delete_file(
-            path_in_repo=old_model_path,
+            path_in_repo=hub_path,
             repo_id=repo_id,
             repo_type=repo_type
         )
@@ -153,19 +135,25 @@ def _get_new_model(id, logger, model_path="temp/iter_model.pth.tar"):
         return False
     
 
-def get_new_model(id, model_path="temp/iter_model.pth.tar"):
+def get_new_model(model_path, hub_path):
     # Configure logger
-    logger = logging.getLogger(f"get_new_model_{id}")
+    logger = logging.getLogger(f"get_new_model")
     coloredlogs.install(level='INFO', logger=logger, 
                         fmt='%(asctime)s %(levelname)s %(message)s')
     
     
-    logger.info(f"Waiting for new model with id {id}")
-    while not _get_new_model(id, logger, model_path=model_path):
+    logger.info(f"Waiting for new model")
+    counter = 0
+    while not _get_new_model(logger, model_path, hub_path):
         logger.info("Retrying in 10 seconds...")
         time.sleep(10)
+        counter += 10
+        if counter > 1800:
+            logger.error("Failed to get new model after 30 minutes")
+            return False
+
+    return True
     
 
 if __name__ == "__main__":
-    upload_model_to_hf("temp/thing.npy")
-    get_new_model(0)
+    upload_file_to_hf("new_model.pth.tar")

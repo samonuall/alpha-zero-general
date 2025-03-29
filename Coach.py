@@ -15,7 +15,20 @@ import multiprocessing as mp
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
+import utils
+from pickle import Pickler
+
 log = logging.getLogger(__name__)
+
+# monkey patch prints with logging
+def print_with_log(*args, **kwargs):
+    """
+    Print function that uses logging instead of print.
+    """
+    log.info(" ".join(map(str, args)), **kwargs)
+
+import builtins
+builtins.print = print_with_log
 
 
 class Coach():
@@ -130,15 +143,32 @@ class Coach():
             for e in self.trainExamplesHistory:
                 trainExamples.extend(e)
             shuffle(trainExamples)
-            
-            # training new network, keeping a copy of the old one
+
             self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+            if self.args.sendToHub:
+                # upload data
+                with open(self.args.checkpoint + "trainExamples.pkl", "wb+") as f:
+                    Pickler(f).dump(trainExamples)
+                
+                utils.upload_file_to_hf(self.args.checkpoint + "trainExamples.pkl")
+                
+                # Upload the model to Hugging Face Hub
+                utils.upload_file_to_hf(self.args.checkpoint + "temp.pth.tar")
+
+                # wait until new model is available
+                if utils.get_new_model(f"{self.args.checkpoint}temp.pth.tar", "new_model.pth.tar"):
+                    log.info("New model available, loading it...")
+                    self.nnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
+                else:
+                    raise Exception("New model not available, exiting...")
+            else:
+                # training new network, keeping a copy of the old one
+                self.nnet.train(trainExamples)
+
+            
+            nmcts = MCTS(self.game, self.nnet, self.args)
             self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
             pmcts = MCTS(self.game, self.pnet, self.args)
-
-            self.nnet.train(trainExamples)
-            nmcts = MCTS(self.game, self.nnet, self.args)
-
             log.info('PITTING AGAINST PREVIOUS VERSION')
             arena = Arena(lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
                           lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), self.game)
