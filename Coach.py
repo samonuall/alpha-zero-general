@@ -31,6 +31,18 @@ import builtins
 builtins.print = print_with_log
 
 
+# Needed so that arena can do parallel computation
+class MCTSPlayer:
+    def __init__(self, game, nnet, args):
+        self.game = game
+        self.nnet = nnet
+        self.args = args
+        self.mcts = MCTS(game, nnet, args)
+    
+    def __call__(self, x, temp=0):
+        return np.argmax(self.mcts.getActionProb(x, temp=temp))
+
+
 class Coach():
     """
     This class executes the self-play + learning. It uses the functions defined
@@ -95,7 +107,7 @@ class Coach():
         """
 
         # take away 4 because of other processes happening
-        NUM_PROCESSES = mp.cpu_count() - 4
+        NUM_PROCESSES = self.args.num_cpu
         log.info(f'Using {NUM_PROCESSES} processes')
         
         for i in range(1, self.args.numIters + 1):
@@ -150,10 +162,10 @@ class Coach():
                 with open(self.args.checkpoint + "trainExamples.pkl", "wb+") as f:
                     Pickler(f).dump(trainExamples)
                 
-                utils.upload_file_to_hf(self.args.checkpoint + "trainExamples.pkl")
+                utils.upload_file_to_hf(self.args.checkpoint + "trainExamples.pkl", "trainExamples.pkl")
                 
                 # Upload the model to Hugging Face Hub
-                utils.upload_file_to_hf(self.args.checkpoint + "temp.pth.tar")
+                utils.upload_file_to_hf(self.args.checkpoint + "temp.pth.tar", "temp.pth.tar")
 
                 # wait until new model is available
                 if utils.get_new_model(self.args.checkpoint, "new_model.pth.tar"):
@@ -166,13 +178,13 @@ class Coach():
                 self.nnet.train(trainExamples)
 
             
-            nmcts = MCTS(self.game, self.nnet, self.args)
+            nmcts = MCTSPlayer(self.game, self.nnet, self.args)
             self.pnet.load_checkpoint(folder=self.args.checkpoint, filename='temp.pth.tar')
-            pmcts = MCTS(self.game, self.pnet, self.args)
+            pmcts = MCTSPlayer(self.game, self.pnet, self.args)
+            
             log.info('PITTING AGAINST PREVIOUS VERSION')
-            arena = Arena(lambda x: np.argmax(pmcts.getActionProb(x, temp=0)),
-                          lambda x: np.argmax(nmcts.getActionProb(x, temp=0)), self.game)
-            pwins, nwins, draws = arena.playGames(self.args.arenaCompare)
+            arena = Arena(nmcts, pmcts, self.game)
+            pwins, nwins, draws = arena.playGames(self.args.arenaCompare, num_workers=NUM_PROCESSES)
 
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
             if pwins + nwins == 0 or float(nwins) / (pwins + nwins) < self.args.updateThreshold:

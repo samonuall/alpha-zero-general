@@ -1,10 +1,11 @@
 import logging
-
+import concurrent.futures
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
 
+#TODO: parallelize arena
 class Arena():
     """
     An Arena class where any 2 agents can be pit against each other.
@@ -78,7 +79,7 @@ class Arena():
             self.display(board)
         return curPlayer * self.game.getGameEnded(board, curPlayer)
 
-    def playGames(self, num, verbose=False):
+    def playGames(self, num, num_workers=1, verbose=False):
         """
         Plays num games in which player1 starts num/2 games and player2 starts
         num/2 games.
@@ -93,24 +94,64 @@ class Arena():
         oneWon = 0
         twoWon = 0
         draws = 0
-        for _ in tqdm(range(num), desc="Arena.playGames (1)"):
-            gameResult = self.playGame(verbose=verbose)
-            if gameResult == 1:
-                oneWon += 1
-            elif gameResult == -1:
-                twoWon += 1
-            else:
-                draws += 1
 
-        self.player1, self.player2 = self.player2, self.player1
 
-        for _ in tqdm(range(num), desc="Arena.playGames (2)"):
-            gameResult = self.playGame(verbose=verbose)
-            if gameResult == -1:
-                oneWon += 1
-            elif gameResult == 1:
-                twoWon += 1
-            else:
-                draws += 1
+        # for _ in tqdm(range(num), desc="Arena.playGames (1)"):
+        #     gameResult = self.playGame(verbose=verbose)
+        #     if gameResult == 1:
+        #         oneWon += 1
+        #     elif gameResult == -1:
+        #         twoWon += 1
+        #     else:
+        #         draws += 1
+
+        # self.player1, self.player2 = self.player2, self.player1
+
+        # for _ in tqdm(range(num), desc="Arena.playGames (2)"):
+        #     gameResult = self.playGame(verbose=verbose)
+        #     if gameResult == -1:
+        #         oneWon += 1
+        #     elif gameResult == 1:
+        #         twoWon += 1
+        #     else:
+        #         draws += 1
+
+        
+        log.info(f"Playing {num*2} games with {num_workers} workers...")
+        # First half: player1 starts
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+            future_to_game = {
+                executor.submit(self.playGame, verbose): i 
+                for i in range(num)
+            }
+            
+            for future in tqdm(concurrent.futures.as_completed(future_to_game), 
+                              total=num, desc="Arena.playGames (1)"):
+                
+                gameResult = future.result()
+                if gameResult == 1:
+                    oneWon += 1
+                elif gameResult == -1:
+                    twoWon += 1
+                else:
+                    draws += 1
+        
+        # Second half: player2 starts
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+            future_to_game = {
+                executor.submit(self.playGame, verbose): i 
+                for i in range(num)
+            }
+            
+            for future in tqdm(concurrent.futures.as_completed(future_to_game), 
+                              total=num, desc="Arena.playGames (2)"):
+                
+                gameResult = future.result()
+                if gameResult == -1:
+                    oneWon += 1
+                elif gameResult == 1:
+                    twoWon += 1
+                else:
+                    draws += 1
 
         return oneWon, twoWon, draws
