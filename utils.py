@@ -94,19 +94,19 @@ def _get_new_model(logger, model_path, hub_path):
     repo_id = "samonuall/alpha-poker"
     repo_type = "model"
     
+    # Login to Hugging Face Hub
+    token = os.environ.get("HF_TOKEN")
+    if token:
+        logger.info("Logging in to Hugging Face using token from environment")
+        login(token=token)
+    else:
+        logger.info("Token not found in environment. Attempting interactive login")
+        login()
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    
     try:
-        # Login to Hugging Face Hub
-        token = os.environ.get("HF_TOKEN")
-        if token:
-            logger.info("Logging in to Hugging Face using token from environment")
-            login(token=token)
-        else:
-            logger.info("Token not found in environment. Attempting interactive login")
-            login()
-        
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        
         # Download the model
         logger.info(f"Downloading model from {repo_id}/new_model to {model_path}")
         api = HfApi()
@@ -118,21 +118,20 @@ def _get_new_model(logger, model_path, hub_path):
         )
             
         logger.info("✅ Model downloaded successfully!")
-        
-        # Delete the model from the repository
-        logger.info(f"Deleting model from repository {repo_id}")
-        api.delete_file(
-            path_in_repo=hub_path,
-            repo_id=repo_id,
-            repo_type=repo_type
-        )
-        logger.info("✅ Model deleted from repository successfully!")
-        
-        return True
-        
     except Exception as e:
         logger.error(f"Error in get_new_model: {str(e)}")
         return False
+    
+    # Delete the model from the repository
+    logger.info(f"Deleting model from repository {repo_id}")
+    api.delete_file(
+        path_in_repo=hub_path,
+        repo_id=repo_id,
+        repo_type=repo_type
+    )
+    logger.info("✅ Model deleted from repository successfully!")
+    
+    return True
     
 
 def get_new_model(model_path, hub_path):
