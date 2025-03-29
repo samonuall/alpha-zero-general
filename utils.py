@@ -114,7 +114,7 @@ def _get_new_model(logger, model_path, hub_path):
             repo_id=repo_id,
             filename=hub_path,
             repo_type=repo_type,
-            local_dir=os.path.dirname(model_path)
+            local_dir=model_path
         )
             
         logger.info("✅ Model downloaded successfully!")
