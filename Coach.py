@@ -52,7 +52,7 @@ class Coach():
     def __init__(self, game, nnet, args):
         self.game = game
         self.nnet = nnet
-        self.pnet = self.nnet.__class__(self.game)  # the competitor network
+        self.pnet = self.nnet.__class__(self.game, args)  # the competitor network
         self.args = args
         self.mcts = MCTS(self.game, self.nnet, self.args)
         self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
@@ -124,20 +124,35 @@ class Coach():
                 
                 # Create workers
                 iterationTrainExamples = deque([], maxlen=self.args.maxlenOfQueue)
-                with ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
+                checkpoint_path = os.path.join(self.args.checkpoint, 'iter_model.pth.tar')
 
-                    # define call to worker function
-                    f = lambda num_eps, id: executor.submit(self.worker_func, 
-                                               num_eps, 
-                                               self.game, 
-                                               os.path.join(self.args.checkpoint, 'iter_model.pth.tar'),
-                                               self.nnet.__class__,
-                                               self.args,
-                                               id)
-                    
-                    futures = [f(num_eps, id) for id, num_eps in enumerate(eps_per_worker)]
-                    for future in as_completed(futures):
-                        iterationTrainExamples.extend(future.result())
+                if NUM_PROCESSES > 1:
+                    with ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
+
+                        # define call to worker function
+                        f = lambda num_eps, id: executor.submit(self.worker_func, 
+                                                num_eps, 
+                                                self.game, 
+                                                checkpoint_path,
+                                                self.nnet.__class__,
+                                                self.args,
+                                                id)
+                        
+                        futures = [f(num_eps, id) for id, num_eps in enumerate(eps_per_worker)]
+                        for future in as_completed(futures):
+                            iterationTrainExamples += future.result()
+                else:
+                     # single-threaded fallback for debugging
+                    for id, num_eps in enumerate(eps_per_worker):
+                        results = self.worker_func(
+                            num_eps,
+                            self.game,
+                            checkpoint_path,
+                            self.nnet.__class__,
+                            self.args,
+                            id
+                        )
+                        iterationTrainExamples += results
 
                 # save the iteration examples to the history 
                 self.trainExamplesHistory.append(iterationTrainExamples)
@@ -175,6 +190,7 @@ class Coach():
                     raise Exception("New model not available, exiting...")
             else:
                 # training new network, keeping a copy of the old one
+                print("Training new network...")
                 self.nnet.train(trainExamples)
 
             
@@ -201,7 +217,7 @@ class Coach():
         np.random.seed(os.getpid())
         
         # Initialize network
-        nnet = nnet_class(game)
+        nnet = nnet_class(game, args)
         nnet.load_checkpoint(folder=os.path.dirname(checkpoint_path), 
                             filename=os.path.basename(checkpoint_path))
 
@@ -218,6 +234,7 @@ class Coach():
             curPlayer = 1
             episodeStep = 0
             
+            community_found = False
             while True:
                 episodeStep += 1
                 canonicalBoard = game.getCanonicalForm(board, curPlayer)
@@ -235,6 +252,7 @@ class Coach():
                 r = game.getGameEnded(board, curPlayer)
                 if r != 0:
                     # Process end-of-game results
+                    # SAM: this is where I would need to change the reward part
                     processed = [(x[0], x[2], r * ((-1) ** (x[1] != curPlayer))) for x in episode_examples]
                     all_examples.extend(processed)
                     break

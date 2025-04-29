@@ -6,6 +6,7 @@ import numpy as np
 from tqdm import tqdm
 
 sys.path.append('../../')
+print(sys.path)
 from utils import *
 from NeuralNet import NeuralNet
 
@@ -17,7 +18,7 @@ from .OthelloNNet import OthelloNNet as onnet
 args = dotdict({
     'lr': 0.001,
     'dropout': 0.3,
-    'epochs': 1,
+    'epochs': 10,
     'batch_size': 64,
     'cuda': torch.cuda.is_available(),
     'num_channels': 512,

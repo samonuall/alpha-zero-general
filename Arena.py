@@ -60,6 +60,8 @@ class Arena():
             if valids[action] == 0:
                 log.error(f'Action {action} is not valid!')
                 log.debug(f'valids = {valids}')
+                log.debug(f'board = {board}')
+                log.debug(f"string representation = {self.game.stringRepresentation(self.game.getCanonicalForm(board, curPlayer))}")
                 assert valids[action] > 0
 
             # Notifying the opponent for the move
@@ -118,38 +120,60 @@ class Arena():
 
         
         log.info(f"Playing {num*2} games with {num_workers} workers...")
-        # First half: player1 starts
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_game = {
-                executor.submit(self.playGame, verbose): i 
-                for i in range(num)
-            }
-            
-            for future in tqdm(concurrent.futures.as_completed(future_to_game), 
-                              total=num, desc="Arena.playGames (1)"):
+        if num_workers > 1:
+            # First half: player1 starts
+            with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+                future_to_game = {
+                    executor.submit(self.playGame, verbose): i 
+                    for i in range(num)
+                }
                 
-                gameResult = future.result()
-                if gameResult == 1:
+                for future in tqdm(concurrent.futures.as_completed(future_to_game), 
+                                total=num, desc="Arena.playGames (1)"):
+                    
+                    gameResult = future.result()
+                    if gameResult > .01:
+                        oneWon += 1
+                    elif gameResult < 0.01:
+                        twoWon += 1
+                    else:
+                        draws += 1
+        else:
+            for _ in tqdm(range(num), desc="Arena.playGames (1)"):
+                gameResult = self.playGame(verbose=verbose)
+                if gameResult > 0.01:
                     oneWon += 1
-                elif gameResult == -1:
+                elif gameResult < 0.01:
                     twoWon += 1
                 else:
                     draws += 1
         
+        self.player1, self.player2 = self.player2, self.player1
+        
         # Second half: player2 starts
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
-            future_to_game = {
-                executor.submit(self.playGame, verbose): i 
-                for i in range(num)
-            }
-            
-            for future in tqdm(concurrent.futures.as_completed(future_to_game), 
-                              total=num, desc="Arena.playGames (2)"):
+        if num_workers > 1:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+                future_to_game = {
+                    executor.submit(self.playGame, verbose): i 
+                    for i in range(num)
+                }
                 
-                gameResult = future.result()
-                if gameResult == -1:
+                for future in tqdm(concurrent.futures.as_completed(future_to_game), 
+                                total=num, desc="Arena.playGames (2)"):
+                    
+                    gameResult = future.result()
+                    if gameResult < 0.01:
+                        oneWon += 1
+                    elif gameResult > 0.01:
+                        twoWon += 1
+                    else:
+                        draws += 1
+        else:
+            for _ in tqdm(range(num), desc="Arena.playGames (2)"):
+                gameResult = self.playGame(verbose=verbose)
+                if gameResult < 0.01:
                     oneWon += 1
-                elif gameResult == 1:
+                elif gameResult > 0.01:
                     twoWon += 1
                 else:
                     draws += 1

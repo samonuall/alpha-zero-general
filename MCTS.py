@@ -2,6 +2,7 @@ import logging
 import math
 
 import numpy as np
+# import dataencoder
 
 EPS = 1e-8
 
@@ -40,7 +41,9 @@ class MCTS():
         s = self.game.stringRepresentation(canonicalBoard)
         counts = [self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(self.game.getActionSize())]
 
+        # TODO: mask probabilities for illegal moves
         if temp == 0:
+            # log.debug("State action pair with 0 visits:" + str([(s, a) for (s, a) in self.Nsa if (s, a) not in self.Nsa or self.Nsa[(s, a)] == 0]))
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
             bestA = np.random.choice(bestAs)
             probs = [0] * len(counts)
@@ -75,6 +78,7 @@ class MCTS():
         s = self.game.stringRepresentation(canonicalBoard)
 
         if s not in self.Es:
+            # print("Adding new state:", s)
             self.Es[s] = self.game.getGameEnded(canonicalBoard, 1)
         if self.Es[s] != 0:
             # terminal node
@@ -119,7 +123,8 @@ class MCTS():
                     best_act = a
 
         a = best_act
-        next_s, next_player = self.game.getNextState(canonicalBoard, 1, a)
+        # print("Getting next state:", self.game.stringRepresentation(canonicalBoard))
+        next_s, next_player = self.game.getNextState(canonicalBoard, 1, a) # DEBUG: I think what happens is that 
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
         v = self.search(next_s)
