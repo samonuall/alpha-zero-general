@@ -50,6 +50,11 @@ gp = GreedyPokerPlayer(g).play
 naive = NaivePlayer(g).play
 hp = HumanPokerPlayer(g).play
 
+
+model = NNet(g)
+model.load_checkpoint('./pretrained_models/poker/pytorch/', 'best.pth.tar')
+neural_player = NNetPlayer(g, model, args).play
+
 # nnet players
 n1 = NNet(g, args)
 # Comment out checkpoint loading as we likely don't have a pretrained Poker model yet

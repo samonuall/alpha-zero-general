@@ -4,13 +4,13 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 
-# Ensure the base directory is in the Python path
-base_dir = os.environ.get("BASE_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
-if base_dir not in sys.path:
-    sys.path.append(base_dir)
+sys.path.append(os.environ["BASE_DIR"] + "/alpha-zero-general/")
+print(sys.path)
 
 from poker.PokerGame import PokerGame
 from poker.PokerPlayers import NaivePlayer
+import NNet as nn
+from utils import dotdict
 # Assuming PokerState is implicitly handled by PokerGame methods or not directly needed here
 # from poker.PokerLogic import PokerState # If direct state manipulation is needed
 
@@ -38,39 +38,25 @@ def generate_naive_data(num_games=100, output_file="naive_pretrain_data.pkl"):
         board = game.getInitBoard()
         curPlayer = 1
         episode_examples = [] # Stores (canonical_state, current_player, policy_vector) for the current game
-
+        players = [player2, None, player1]
+        
         while True:
-            # Get the canonical representation of the board for the current player
-            # The state stored should be the one the NN will see
-            canonicalBoard = game.getCanonicalForm(board, curPlayer)
+            action = players[curPlayer + 1].play(game.getCanonicalForm(board, curPlayer))
+            valids = game.getValidMoves(game.getCanonicalForm(board, curPlayer), 1)
 
-            # Determine which player's turn it is
-            active_player = player1 if curPlayer == 1 else player2
+            if valids[action] == 0:
+                raise ValueError(f"Invalid action {action} for player {curPlayer}!")
+            
+            episode_examples.append([
+                game.getCanonicalForm(board, curPlayer), # Store the canonical state
+                curPlayer, # Store the current player
+                [int(action == i) for i in range(4)] # Store the policy vector (valid actions)
+            ])
+            
 
-            # Get the action from the NaivePlayer
-            # NaivePlayer.play expects the raw board state, not canonical
-            # Note: NaivePlayer might need adjustments if it expects specific player UUIDs
-            #       or if the board state passed needs modification.
-            #       For simplicity, we pass the raw board. If NaivePlayer relies
-            #       on player index 0 always being 'itself', this might need adjustment
-            #       depending on how PokerGame handles player turns and board states.
-            #       Let's assume PokerGame handles the board state correctly for the player.
-            action = active_player.play(board) # Pass the raw board
-
-            # Create the policy vector (one-hot encoding of the chosen action)
-            pi = np.zeros(action_size)
-            pi[action] = 1.0
-
-            # Store the canonical state, current player, and policy vector
-            # We store the canonical state because that's what the NN will train on
-            episode_examples.append([canonicalBoard, curPlayer, pi])
-
-            # Get the next state
             board, curPlayer = game.getNextState(board, curPlayer, action)
-
-            # Check if the game ended
+            
             reward = game.getGameEnded(board, curPlayer) # Pass the *next* player
-
             if reward != 0:
                 # Game has ended, assign values to all stored examples
                 processed_examples = []
@@ -100,19 +86,41 @@ def generate_naive_data(num_games=100, output_file="naive_pretrain_data.pkl"):
 
     return all_training_data
 
+
+NUM_GAMES = 1000
 if __name__ == "__main__":
     # Example usage: Generate data for 1000 games and save it
     # You might want to save it in a specific checkpoint directory
-    checkpoint_dir = os.path.join(base_dir, 'alpha-zero-general', 'pretrained_data')
+    checkpoint_dir = os.path.join(os.environ["BASE_DIR"], 'alpha-zero-general', 'pretrained_data')
     data_file = os.path.join(checkpoint_dir, 'naive_pretrain_data_1k.pkl')
 
-    generate_naive_data(num_games=1000, output_file=data_file)
+    # generate_naive_data(num_games=NUM_GAMES, output_file=data_file)
 
-    # You can load it later like this:
-    # with open(data_file, "rb") as f:
-    #     loaded_data = pickle.load(f)
-    # print(f"Loaded {len(loaded_data)} examples.")
-    # if loaded_data:
-    #     print("First example state shape:", loaded_data[0][0].shape)
-    #     print("First example policy:", loaded_data[0][1])
-    #     print("First example value:", loaded_data[0][2])
+    with open(data_file, "rb") as f:
+        loaded_data = pickle.load(f)
+    
+    print(f"Loaded {len(loaded_data)} examples.")
+    
+
+    # Begin training
+    game = PokerGame()
+    args = dotdict({
+        # Fixed hyperparams for NNet
+        'lr': .00025, # Turn up lr for lower dimensions and batch sizes
+        'epochs': 10,
+        'batch_size': 256, # probably increase batch size for final training
+        'cuda': False,
+        "use_wandb": False, # Control wandb usage
+    })
+    model = nn.NNetWrapper(game, args)
+
+    class Fake:
+        def __init__(self, data):
+            self.data = data
+
+        def to_vector(self):
+            return self.data
+
+    model.train([(Fake(state), pi, v) for state, pi, v in loaded_data])
+    # Save the model
+    model.save_checkpoint(folder=checkpoint_dir, filename='naive_pretrained_model.pth.tar')

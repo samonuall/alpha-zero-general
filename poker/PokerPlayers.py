@@ -2,6 +2,15 @@ import numpy as np
 from pypokerengine.engine.data_encoder import DataEncoder
 from pypokerengine.utils.card_utils import estimate_hole_card_win_rate
 from pypokerengine.utils.card_utils import gen_cards
+from MCTS import MCTS
+
+class NNetPlayer():
+    def __init__(self, game, nnet, args):
+        self.mcts = MCTS(game, nnet, args)
+
+    def play(self, board):
+        return np.argmax(self.mcts.getActionProb(board, temp=1))
+
 
 class NaivePlayer():
     def __init__(self, game):
@@ -12,9 +21,6 @@ class NaivePlayer():
         hole_card = board.player_states[uuids[0]].hole_cards
         round_state = DataEncoder.encode_round_state(board.emulator_state)
         valid_actions = self.game.getValidMoves(board, 1)
-
-        print(hole_card)
-        print(round_state["community_card"])
         
         win_prob = estimate_hole_card_win_rate(300, 2, gen_cards(hole_card), gen_cards(round_state["community_card"]))
         if win_prob >= 0.7 and valid_actions[0] == 1:
