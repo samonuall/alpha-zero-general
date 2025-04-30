@@ -66,7 +66,7 @@ class PokerBoard:
         new_states = {}
         for uuid, state in self.player_states.items():
             new_states[uuid] = PokerState()
-            new_states[uuid].features = state.features.copy()
+            new_states[uuid].features = state.features.copy() # This copies the board_texture feature too
             new_states[uuid].hole_cards = state.hole_cards.copy()
             new_states[uuid].community_cards = state.community_cards.copy()
         new_board.player_states = new_states
@@ -101,7 +101,8 @@ class PokerState:
             'pot_odds': 0.0,
             'my_stack': 0.0,
             'opp_stack': 0.0,
-            'num_raises_this_street': 0.0
+            'num_raises_this_street': 0.0,
+            'board_texture': np.zeros(7, dtype=int) # Added board texture feature
         }
         self.hole_cards = []
         self.community_cards = []
@@ -189,9 +190,16 @@ class PokerState:
             self.features["street"][street] = 1
 
     def set_round_count(self, round_count):
-        bucket = math.floor(round_count / 5) * 5
+        bucket = math.floor(round_count / 2) * 2
         self.features["round_count"] = float(bucket)
     
+    def set_board_texture(self, texture_onehot):
+        assert isinstance(texture_onehot, np.ndarray) and texture_onehot.shape == (7,), "Board texture must be a 7-dim numpy array"
+        self.features['board_texture'] = texture_onehot.astype(int)
+
+    def get_board_texture(self):
+        return self.features['board_texture']
+
     def clear(self):
         # Clear values
         self.features = {
@@ -208,18 +216,21 @@ class PokerState:
             'pot_odds': 0.0,
             'my_stack': 0.0,
             'opp_stack': 0.0,
-            'num_raises_this_street': 0.0
+            'num_raises_this_street': 0.0,
+            'board_texture': np.zeros(7, dtype=int) # Reset board texture
         }
         
     
     def to_vector(self):
         # Convert all features to a single numpy vector
         vectors = []
-        for value in self.features.values():
-            if isinstance(value, np.ndarray):
-                vectors.append(value)
-            else:
-                vectors.append(np.array([value]))
+        exclude = ["community_suit", "community_rank"]
+        for name, value in self.features.items():
+            if name not in exclude:
+                if isinstance(value, np.ndarray):
+                    vectors.append(value)
+                else:
+                    vectors.append(np.array([value]))
         
         # Concatenate all feature vectors into a single vector
         feature_vector = np.concatenate(vectors)
@@ -249,19 +260,23 @@ class PokerState:
                 readable_value = ""
             elif key == 'pot_odds':
                 readable_value = ""
+            elif key == 'board_texture':
+                readable_value = str(self.features['board_texture'])
             elif key == 'street':
                 street_name = [street_rev_converter[i] for i, present in enumerate(value) if present]
                 readable_value = street_name[0] if street_name else "None"
             else:
                  readable_value = str(value) # Default for any other keys
 
-            result.append(f"{key}: {readable_value}")
+            # Only append if readable_value is not empty (to skip vector features)
+            if readable_value:
+                result.append(f"{key}: {readable_value}")
 
         # Sort cards so that states with same cards are the same
         hole_str = ", ".join(sorted(self.hole_cards)) if self.hole_cards else "None"
         comm_str = ", ".join(sorted(self.community_cards)) if self.community_cards else "None"
         result.insert(0, f"Hole Cards: {hole_str}")
-        result.insert(1, f"Community Cards: {comm_str}")
+        # result.insert(1, f"Community Cards: {comm_str}")
 
         return "\n".join(result)
     
@@ -285,8 +300,10 @@ if __name__ == "__main__":
     features.set_stack(1000, 1000)
     features.set_num_raises_this_street(2)
     features.set_pot_odds(50, 20)
+    features.set_board_texture(np.array([0, 1, 0, 0, 1, 1, 0])) # Example texture
 
 
     print(features.to_vector())
+    print(f"Vector length: {len(features.to_vector())}") # Check length
     print()
     print(features)

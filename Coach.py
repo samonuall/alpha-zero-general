@@ -17,6 +17,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import utils
 from pickle import Pickler
+import wandb # Add wandb import
+from utils import dotdict
 
 log = logging.getLogger(__name__)
 
@@ -25,18 +27,18 @@ def print_with_log(*args, **kwargs):
     """
     Print function that uses logging instead of print.
     """
-    log.info(" ".join(map(str, args)), **kwargs)
+    log.info(" ".join(map(str, args)))
 
 import builtins
 builtins.print = print_with_log
-
 
 # Needed so that arena can do parallel computation
 class MCTSPlayer:
     def __init__(self, game, nnet, args):
         self.game = game
         self.nnet = nnet
-        self.args = args
+        self.args = dotdict(args)
+        self.args.numMCTSSims = 20  # only one simulation for the player
         self.mcts = MCTS(game, nnet, args)
     
     def __call__(self, x, temp=0):
@@ -105,7 +107,6 @@ class Coach():
         It then pits the new neural network against the old one and accepts it
         only if it wins >= updateThreshold fraction of games.
         """
-
         # take away 4 because of other processes happening
         NUM_PROCESSES = self.args.num_cpu
         log.info(f'Using {NUM_PROCESSES} processes')
@@ -202,6 +203,12 @@ class Coach():
             arena = Arena(nmcts, pmcts, self.game)
             pwins, nwins, draws = arena.playGames(self.args.arenaCompare, num_workers=NUM_PROCESSES)
 
+            # Log win rate to wandb - This happens in the main process after workers complete.
+            if self.args.use_wandb: # Check if wandb is enabled via args
+                win_rate = nwins / (pwins + nwins) if (pwins + nwins) > 0 else 0
+                # Logging occurs in the main process loop.
+                wandb.log({"iteration": i, "win_rate_vs_previous": win_rate, "pwins": pwins, "nwins": nwins, "draws": draws})
+
             log.info('NEW/PREV WINS : %d / %d ; DRAWS : %d' % (nwins, pwins, draws))
             if pwins + nwins == 0 or float(nwins) / (pwins + nwins) < self.args.updateThreshold:
                 log.info('REJECTING NEW MODEL')
@@ -210,6 +217,17 @@ class Coach():
                 log.info('ACCEPTING NEW MODEL')
                 self.nnet.save_checkpoint(folder=self.args.checkpoint, filename=self.getCheckpointFile(i))
                 self.nnet.save_checkpoint(folder=self.args.checkpoint, filename='best.pth.tar')
+                # Log acceptance to wandb
+                if self.args.use_wandb: # Check if wandb is enabled via args
+                    wandb.log({"model_accepted": 1})
+            
+            if self.args.use_wandb and (pwins + nwins == 0 or float(nwins) / (pwins + nwins) < self.args.updateThreshold): # Check if wandb is enabled via args
+                 wandb.log({"model_accepted": 0}) # Log rejection if model was rejected
+
+        # Finish wandb run at the end of training - This happens in the main process.
+        if self.args.use_wandb: # Check if wandb is enabled via args
+            wandb.finish()
+
 
     @staticmethod
     def worker_func(num_eps, game, checkpoint_path, nnet_class, args, id):

@@ -13,6 +13,32 @@ use this script to play any two agents against each other, or play manually with
 any agent.
 """
 
+args = dotdict({
+        'numIters': 10,
+        'numEps': 25,
+        'tempThreshold': 15,
+        'updateThreshold': 0.6,
+        'maxlenOfQueue': 200000,
+        'numMCTSSims': 50,
+        'arenaCompare': 15,
+        'cpuct': 1,
+        'checkpoint': './temp/',
+        'load_model': False,
+        'load_folder_file': ('/dev/models/poker-bot','best.pth.tar'),
+        'numItersForTrainExamplesHistory': 20,
+        "sendToHub": False,
+        "num_cpu": 10,
+        # Fixed hyperparams for NNet
+        'lr': .0005,
+        'dropout': 0.3,
+        'epochs': 10,
+        'batch_size': 64,
+        'cuda': False,
+        'block_width': 256,
+        'n_blocks': 1,
+        "wandb_run_name": "test_run"
+    })
+
 human_vs_cpu = False # Set to True to play against the AI
 
 # Instantiate PokerGame
@@ -25,11 +51,15 @@ naive = NaivePlayer(g).play
 hp = HumanPokerPlayer(g).play
 
 # nnet players
-n1 = NNet(g)
+n1 = NNet(g, args)
 # Comment out checkpoint loading as we likely don't have a pretrained Poker model yet
 # n1.load_checkpoint('./pretrained_models/poker/pytorch/','some_poker_model.pth.tar')
-args1 = dotdict({'numMCTSSims': 25, 'cpuct':1.0}) # Adjust sims as needed for Poker
-mcts1 = MCTS(g, n1, args1)
+args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0}) # Adjust sims as needed for Poker
+args = dotdict(args1)
+print(args)
+args["numMCTSSims"] = 10
+print
+mcts1 = MCTS(g, n1, args)
 n1p = lambda x: np.argmax(mcts1.getActionProb(x, temp=0))
 
 if human_vs_cpu:

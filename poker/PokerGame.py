@@ -20,6 +20,7 @@ import time
 from contextlib import contextmanager
 import numpy as np
 from pypokerengine.engine.poker_constants import PokerConstants as Const
+from poker.boardtexture import classify_board_texture, board_texture_to_onehot # Added import
 
 # Sets the seed so that shuffling is deterministic
 @contextmanager
@@ -107,7 +108,7 @@ def get_last_n_actions(action_history, player_uuid, n):
         return actions[-n:] if n > 0 else []
 
 
-MAX_ROUND = 5
+MAX_ROUND = 10
 class PokerGame(Game):
     def __init__(self, seed=None):
         super().__init__()
@@ -145,21 +146,31 @@ class PokerGame(Game):
         
         # Update poker states in board
         round_state = DataEncoder.encode_round_state(board.emulator_state)
+        
+        # Calculate initial board texture (preflop has no community cards, handle this)
+        community_cards = round_state["community_card"]
+        if len(community_cards) >= 3:
+            texture_dict = classify_board_texture(board.emulator_state["street"], (), community_cards)
+            texture_onehot = board_texture_to_onehot(texture_dict)
+        else: # Preflop case
+            texture_onehot = np.zeros(7, dtype=np.int32) # Default zero vector for preflop
+
         for i, player_uuid in enumerate(self.emulator.players_holder):
             hole_card = board.emulator_state["table"].seats.players[i].hole_card
             ehs = estimate_hole_card_win_rate(
                 100, 
                 2, 
                 hole_card, 
-                [Card.from_str(card) for card in round_state["community_card"]]
+                [Card.from_str(card) for card in community_cards]
             )
             
             board.player_states[player_uuid]["EHS"] = ehs
             board.player_states[player_uuid].set_round_count(1)
-            board.player_states[player_uuid].set_community(round_state["community_card"])
+            board.player_states[player_uuid].set_community(community_cards)
             board.player_states[player_uuid].set_hole(list(map(str, hole_card)))
             board.player_states[player_uuid].set_pot(round_state["pot"]["main"]["amount"])
             board.player_states[player_uuid].set_street(board.emulator_state["street"])
+            board.player_states[player_uuid].set_board_texture(texture_onehot) # Set initial board texture
 
             # Set stacks
             stacks = [board.emulator_state["table"].seats.players[i].stack for i in range(2)]
@@ -288,8 +299,12 @@ class PokerGame(Game):
                 # New pot
                 result_board.player_states[player_uuid].set_pot(round_state["pot"]["main"]["amount"])
                 # New community cards
-                result_board.player_states[player_uuid].set_community(round_state["community_card"])
+                community_cards = round_state["community_card"]
+                result_board.player_states[player_uuid].set_community(community_cards)
                 result_board.player_states[player_uuid].set_street(result_board.emulator_state["street"])
+                # New board texture (preflop case)
+                texture_onehot = np.zeros(7, dtype=np.int32) # Default zero vector for preflop
+                result_board.player_states[player_uuid].set_board_texture(texture_onehot)
             
             elif street_change and result_board.emulator_state["street"] != "showdown":
                 # Community cards have most likely changed
@@ -300,8 +315,14 @@ class PokerGame(Game):
                     [Card.from_str(card) for card in hole_cards], 
                     [Card.from_str(card) for card in round_state["community_card"]]
                 )
-                result_board.player_states[player_uuid].set_community(round_state["community_card"])
+                community_cards = round_state["community_card"]
+                result_board.player_states[player_uuid].set_community(community_cards)
                 
+                # Calculate new board texture
+                texture_dict = classify_board_texture(result_board.emulator_state["street"], (), community_cards)
+                texture_onehot = board_texture_to_onehot(texture_dict)
+                result_board.player_states[player_uuid].set_board_texture(texture_onehot)
+
                 # everything else same
                 result_board.player_states[player_uuid].set_round_count(float(board.emulator_state["round_count"]))
                 result_board.player_states[player_uuid].set_hole(board.player_states[player_uuid].get_hole())
@@ -316,6 +337,8 @@ class PokerGame(Game):
                 result_board.player_states[player_uuid].set_hole(board.player_states[player_uuid].get_hole())
                 result_board.player_states[player_uuid].set_pot(round_state["pot"]["main"]["amount"])
                 result_board.player_states[player_uuid].set_street(result_board.emulator_state["street"])
+                # Pass board texture along
+                result_board.player_states[player_uuid].set_board_texture(board.player_states[player_uuid].get_board_texture())
         
             # Set stacks
             players = result_board.emulator_state["table"].seats.players
@@ -418,7 +441,6 @@ class PokerGame(Game):
         board = board.copy()
         # Return whatever reward seems right, I'll figure out later what I need to change to make it work
         if board.finished:
-            print("Game done")
             uuids = list(board.player_states.keys())
             if player == 1:
                 curr_player = uuids[0]
@@ -512,8 +534,19 @@ if __name__ == "__main__":
     print(game.stringRepresentation(board))
 
     # from poker.pytorch.NNet import NNetWrapper
-    # nnet = NNetWrapper(game)
-    # nnet.train(train_examples)
+    # from utils import dotdict
+    # args = dotdict({
+    #     'lr': .0005,
+    #     'dropout': 0.3,
+    #     'epochs': 10,
+    #     'batch_size': 64,
+    #     'cuda': False,
+    #     'block_width': 256,
+    #     'n_blocks': 1,
+    #     "wandb_run_name": "test_run"
+    # })
+    # nnet = NNetWrapper(game, args)
+    # nnet.train(train_examples * 10)
     # print(nnet.predict(board))
 
     # game = PokerGame()
