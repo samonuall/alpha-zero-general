@@ -152,6 +152,7 @@ class NNetWrapper(NeuralNet):
 
     def load_checkpoint(self, folder='checkpoint', filename='checkpoint.pth.tar'):
         filepath = os.path.join(folder, filename)
+        print(f"Loading checkpoint {filepath}")
         if not os.path.exists(filepath):
             raise Exception(f"No model in path {filepath}")
         map_location = None if args.cuda else 'cpu'

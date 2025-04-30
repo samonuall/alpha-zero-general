@@ -123,4 +123,4 @@ if __name__ == "__main__":
 
     model.train([(Fake(state), pi, v) for state, pi, v in loaded_data])
     # Save the model
-    model.save_checkpoint(folder=checkpoint_dir, filename='naive_pretrained_model.pth.tar')
+    model.save_checkpoint(folder=checkpoint_dir, filename='naive_pretrained_model_100.pth.tar')

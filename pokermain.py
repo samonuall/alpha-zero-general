@@ -17,10 +17,10 @@ from utils import *
 # 64 dim with larger numEps, batch size, and learning rate
 # Maybe the 96 dim with same params, but 25 mctssims? Only if have time
 # Tmrw ill start running with the most promising one in background
-run_name = "lr_decay-board_texture-80-redo" # Change this to your desired run name
+run_name = "pretrained-80" # Change this to your desired run name
 args = dotdict({
         'numIters': 10, # In all we should do at least 10_000 games
-        'numEps': 2, # Turn this up to like 50 at least
+        'numEps': 50, # Turn this up to like 50 at least
         'tempThreshold': 15,
         'updateThreshold': 0.5,
         'maxlenOfQueue': 200000,
@@ -29,22 +29,23 @@ args = dotdict({
         'cpuct': 1,
         'checkpoint': f'./temp-{run_name}/',
         'load_model': False,
-        'load_folder_file': ('/dev/models/poker-bot','best.pth.tar'),
+        'load_folder_file': ('alpha-zero-general/pretrained_data','naive_pretrained_model.pth.tar'),
         'numItersForTrainExamplesHistory': 20,
         "sendToHub": False,
-        "num_cpu": 2,
+        "num_cpu": 10,
         # Fixed hyperparams for NNet
         'lr': .00025, # Turn up lr for lower dimensions and batch sizes
         'dropout': 0.3,
         'epochs': 10,
-        'batch_size': 64, # probably increase batch size for final training
+        'batch_size': 128, # probably increase batch size for final training
         'cuda': False,
         'block_width': 256,
         'n_blocks': 1,
         # Add wandb specific args
-        "use_wandb": False, # Control wandb usage
+        "use_wandb": True, # Control wandb usage
         "wandb_project": "alpha-poker",
-        "wandb_run_name": run_name # Use this for the run name
+        "wandb_run_name": run_name, # Use this for the run name
+        "load_model": True, # Set to True if you want to load a model
     })
 
 
