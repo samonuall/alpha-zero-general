@@ -108,7 +108,7 @@ if __name__ == "__main__":
         # Fixed hyperparams for NNet
         'lr': .00025, # Turn up lr for lower dimensions and batch sizes
         'epochs': 10,
-        'batch_size': 256, # probably increase batch size for final training
+        'batch_size': 512, # probably increase batch size for final training
         'cuda': False,
         "use_wandb": False, # Control wandb usage
     })
