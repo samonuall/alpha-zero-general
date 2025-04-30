@@ -451,7 +451,6 @@ class PokerGame(Game):
 
             scaled_reward = (board.end_stacks[curr_player] - 1000) / 1000
             if board.winner == None:
-                print("TIE")
                 return 0.001
             elif board.winner == curr_player:
                 return scaled_reward

@@ -18,7 +18,6 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import utils
 from pickle import Pickler
 import wandb # Add wandb import
-from utils import dotdict
 
 log = logging.getLogger(__name__)
 
@@ -35,11 +34,15 @@ builtins.print = print_with_log
 # Needed so that arena can do parallel computation
 class MCTSPlayer:
     def __init__(self, game, nnet, args):
-        self.game = game
-        self.nnet = nnet
-        self.args = dotdict(args)
-        self.args.numMCTSSims = 20  # only one simulation for the player
-        self.mcts = MCTS(game, nnet, args)
+        # Create copy of args with smaller sims
+        new_args = {}
+        for k, v in args.items():
+            if k == "numMCTSSims":
+                new_args[k] = 20
+            else:
+                new_args[k] = v
+        new_args = utils.dotdict(new_args)
+        self.mcts = MCTS(game, nnet, new_args)
     
     def __call__(self, x, temp=0):
         return np.argmax(self.mcts.getActionProb(x, temp=temp))
