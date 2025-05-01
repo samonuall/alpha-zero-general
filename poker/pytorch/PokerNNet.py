@@ -21,7 +21,10 @@ class ResBlock(nn.Module):
 class PokerNNet(nn.Module):
     def __init__(self, input_size: int, action_size: int, args=None):
         super().__init__()
-        hidden_dim = 100  # maybe do between this and 98 for main training, maybe like 80
+        if hasattr(args, 'dim'):
+            hidden_dim = args.dim  # maybe do between this and 98 for main training, maybe like 80
+        else:
+            hidden_dim = 80
         self.act = nn.SiLU()
 
         # input embedding

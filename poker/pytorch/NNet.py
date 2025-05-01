@@ -23,8 +23,8 @@ args = dotdict({
     'epochs': 10,
     'batch_size': 64,
     'cuda': torch.cuda.is_available(),
-    'block_width': 256,
-    'n_blocks': 3,
+    "use_wandb": False, # Set to True to use wandb
+    "dim": 80
     # 'run_name': 'poker_run_' + str(int(time.time())) # Remove run_name, wandb initialized externally
 })
 

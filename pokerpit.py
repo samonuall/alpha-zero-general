@@ -36,7 +36,9 @@ args = dotdict({
         'cuda': False,
         'block_width': 256,
         'n_blocks': 1,
-        "wandb_run_name": "test_run"
+        "wandb_run_name": "test_run",
+        "use_wandb": False, # Set to True to use wandb
+        "dim": 80,
     })
 
 human_vs_cpu = False # Set to True to play against the AI
@@ -52,7 +54,6 @@ hp = HumanPokerPlayer(g).play
 
 
 model = NNet(g)
-model.load_checkpoint('./pretrained_models/poker/pytorch/', 'best.pth.tar')
 neural_player = NNetPlayer(g, model, args).play
 
 # nnet players

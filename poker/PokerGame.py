@@ -78,13 +78,14 @@ def init_emulator(players_info, max_round=10):
     return emulator
 
 
-def get_last_n_actions(action_history, player_uuid, n):
+def get_last_n_actions(action_history, player_uuid, n, uuid_map=None):
         """
         Returns the last n actions (as strings) taken by the opponent to player_uuid, ordered oldest to newest.
         action_history: dict of street -> list of action dicts (see example above)
         player_uuid: string
         n: int
         """
+        print("ACTION HISTORY:", action_history)
         actions = []
         
         # Flatten all actions in order of streets
@@ -97,6 +98,9 @@ def get_last_n_actions(action_history, player_uuid, n):
         # Filter for actions by the other player
         for act in all_actions:
             if act.get('uuid') != player_uuid:
+                if uuid_map:
+                    if act.get('uuid') == uuid_map[player_uuid]:
+                        continue
                 action = act["action"].lower()
                 if action == "bigblind" or action == "smallblind":
                     continue
@@ -110,7 +114,7 @@ def get_last_n_actions(action_history, player_uuid, n):
 
 MAX_ROUND = 10
 class PokerGame(Game):
-    def __init__(self, seed=None):
+    def __init__(self, seed=None, max_round=MAX_ROUND, uuids=None):
         super().__init__()
         # players info is how each round will start
         self.players_info = {
@@ -118,8 +122,12 @@ class PokerGame(Game):
             "player2": {"stack": 1000, "name": "Bob"}
         }
         self.emulator = init_emulator(self.players_info, max_round=MAX_ROUND)
-        self.max_round = MAX_ROUND
+        self.max_round = max_round
         self.seed = seed
+        if uuids:
+            self.uuid_map = {player: uuid for uuid, player in zip(uuids, self.emulator.players_holder)}
+        else:
+            self.uuid_map = None
 
     def getInitBoard(self):
         board = PokerBoard(self.players_info)
@@ -415,7 +423,7 @@ class PokerGame(Game):
                     uuid = uuids[1]
                 
                 round_state = DataEncoder.encode_round_state(board.emulator_state)
-                opponent_moves = get_last_n_actions(round_state["action_histories"], uuid, 1)
+                opponent_moves = get_last_n_actions(round_state["action_histories"], uuid, 1, uuid_map=self.uuid_map)
 
                 # Figure out if opponent's last move was a raise or not
                 raise_move = (len(opponent_moves) > 0 and opponent_moves[-1] == "raise")
@@ -450,6 +458,7 @@ class PokerGame(Game):
                 opponent = uuids[0]
 
             scaled_reward = (board.end_stacks[curr_player] - 1000) / 1000
+            print("ENDSTACKS:", board.end_stacks)
             if board.winner == None:
                 return 0.001
             elif board.winner == curr_player:
@@ -531,6 +540,7 @@ if __name__ == "__main__":
     print(game.getGameEnded(board, curr_player))
     print()
     print(game.stringRepresentation(board))
+    print(board.emulator_state)
 
     # from poker.pytorch.NNet import NNetWrapper
     # from utils import dotdict
