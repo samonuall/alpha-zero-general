@@ -190,8 +190,8 @@ class PokerState:
             self.features["street"][street] = 1
 
     def set_round_count(self, round_count):
-        bucket = math.floor(round_count / 2) * 2
-        self.features["round_count"] = float(bucket)
+        # bucket = math.floor(round_count / 5) * 5
+        self.features["round_count"] = float(round_count)
     
     def set_board_texture(self, texture_onehot):
         assert isinstance(texture_onehot, np.ndarray) and texture_onehot.shape == (7,), "Board texture must be a 7-dim numpy array"

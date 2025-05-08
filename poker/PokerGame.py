@@ -21,6 +21,7 @@ from contextlib import contextmanager
 import numpy as np
 from pypokerengine.engine.poker_constants import PokerConstants as Const
 from poker.boardtexture import classify_board_texture, board_texture_to_onehot # Added import
+from pypokerengine.players import BasePokerPlayer
 
 # Sets the seed so that shuffling is deterministic
 @contextmanager
@@ -32,7 +33,7 @@ def seeded(seed):
     finally:
         random.setstate(prev)
 
-class FakePlayer:
+class FakePlayer():
     def __init__(self):
         self.uuid = None
 
@@ -85,7 +86,6 @@ def get_last_n_actions(action_history, player_uuid, n, uuid_map=None):
         player_uuid: string
         n: int
         """
-        print("ACTION HISTORY:", action_history)
         actions = []
         
         # Flatten all actions in order of streets
@@ -398,12 +398,12 @@ class PokerGame(Game):
             player_pos = 0 if uuids[0] == "player1" else 1
 
         # DEBUG: Check if player_pos is correct
-        if player == 1:
-            expected_emulator_player = 1 if list(board.player_states.keys())[0] == "player1" else 0
-            assert board.emulator_state['next_player'] == expected_emulator_player, \
-                f"Emulator next_player {board.emulator_state['next_player']} mismatch! Expected {expected_emulator_player} for canonical player 1 with keys {list(board.player_states.keys())}"
-            assert player_pos == board.emulator_state['next_player'], \
-                f"Calculated player_pos {player_pos} != emulator next_player {board.emulator_state['next_player']} for board keys {list(board.player_states.keys())}"
+        # if player == 1:
+        #     expected_emulator_player = 1 if list(board.player_states.keys())[0] == "player1" else 0
+        #     assert board.emulator_state['next_player'] == expected_emulator_player, \
+        #         f"Emulator next_player {board.emulator_state['next_player']} mismatch! Expected {expected_emulator_player} for canonical player 1 with keys {list(board.player_states.keys())}"
+        #     assert player_pos == board.emulator_state['next_player'], \
+        #         f"Calculated player_pos {player_pos} != emulator next_player {board.emulator_state['next_player']} for board keys {list(board.player_states.keys())}"
         
         sb_amount = board.emulator_state["small_blind_amount"]
         legal_actions = ActionChecker.legal_actions(players, player_pos, sb_amount, board.emulator_state["street"])
@@ -458,7 +458,6 @@ class PokerGame(Game):
                 opponent = uuids[0]
 
             scaled_reward = (board.end_stacks[curr_player] - 1000) / 1000
-            print("ENDSTACKS:", board.end_stacks)
             if board.winner == None:
                 return 0.001
             elif board.winner == curr_player:

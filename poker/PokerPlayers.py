@@ -3,13 +3,51 @@ from pypokerengine.engine.data_encoder import DataEncoder
 from pypokerengine.utils.card_utils import estimate_hole_card_win_rate
 from pypokerengine.utils.card_utils import gen_cards
 from MCTS import MCTS
+from poker.PokerGame import PokerGame
 
 class NNetPlayer():
     def __init__(self, game, nnet, args):
-        self.mcts = MCTS(game, nnet, args)
+        self.nnet = nnet
+        self.args = args
 
     def play(self, board):
-        return np.argmax(self.mcts.getActionProb(board, temp=1))
+        for name in board.player_states:
+            print("HOLE:", board.player_states[name].hole_cards)
+        print("Incoming round count:", board.emulator_state["round_count"])
+        mcts = MCTS(PokerGame(max_round=board.emulator_state["round_count"]), self.nnet, self.args)
+        action = np.argmax(mcts.getActionProb(board, temp=1))
+        print("Action chosen by MCTS:", action)
+        return action
+
+
+class AggressivePlayer():
+    def __init__(self, game):
+        self.game = game
+
+    def play(self, board):
+        uuids = list(board.player_states.keys())
+        hole_card = board.player_states[uuids[0]].hole_cards
+        round_state = DataEncoder.encode_round_state(board.emulator_state)
+        valid_actions = self.game.getValidMoves(board, 1)
+        
+        win_prob = estimate_hole_card_win_rate(500, 2, gen_cards(hole_card), gen_cards(round_state["community_card"]))
+        if win_prob >= 0.3 and valid_actions[0] == 1:
+            # raise
+            action = 0
+        elif win_prob > 0.1 and valid_actions[1] == 1 or valid_actions[2] == 1: 
+            # check or call
+            if valid_actions[1] == 1:
+                action = 1
+            elif valid_actions[2] == 1:
+                # fold
+                action = 2
+        elif valid_actions[3] == 1:
+            action = 3
+        else:
+            # pick whatever is valid
+            action = valid_actions.index(1)
+
+        return action
 
 
 class NaivePlayer():

@@ -1,5 +1,10 @@
+import sys, os
+sys.path.append(os.getcwd())
+
 import logging
 import math
+from pypokerengine.utils.card_utils import gen_deck
+import random
 
 import numpy as np
 # import dataencoder
@@ -35,13 +40,19 @@ class MCTS():
             probs: a policy vector where the probability of the ith action is
                    proportional to Nsa[(s,a)]**(1./temp)
         """
-        for i in range(self.args.numMCTSSims):
-            self.search(canonicalBoard)
+        canonicalBoard = canonicalBoard.copy()
+        uuids = list(canonicalBoard.player_states.keys())
+        deck = gen_deck(exclude_cards=canonicalBoard.player_states[uuids[0]].hole_cards + canonicalBoard.player_states[uuids[0]].community_cards)
+        for i in range(self.args.numRandomSims):
+            canonicalBoard.seed += 1
+            canonicalBoard.emulator_state["table"].deck.shuffle()  
+            canonicalBoard.player_states[uuids[1]].set_hole(list(map(str, deck.draw_cards(2))))
+            for i in range(self.args.numMCTSSims):
+                self.search(canonicalBoard)
 
         s = self.game.stringRepresentation(canonicalBoard)
         counts = [self.Nsa[(s, a)] if (s, a) in self.Nsa else 0 for a in range(self.game.getActionSize())]
 
-        # TODO: mask probabilities for illegal moves
         if temp == 0:
             # log.debug("State action pair with 0 visits:" + str([(s, a) for (s, a) in self.Nsa if (s, a) not in self.Nsa or self.Nsa[(s, a)] == 0]))
             bestAs = np.array(np.argwhere(counts == np.max(counts))).flatten()
@@ -78,7 +89,6 @@ class MCTS():
         s = self.game.stringRepresentation(canonicalBoard)
 
         if s not in self.Es:
-            # print("Adding new state:", s)
             self.Es[s] = self.game.getGameEnded(canonicalBoard, 1)
         if self.Es[s] != 0:
             # terminal node
@@ -97,7 +107,7 @@ class MCTS():
 
                 # NB! All valid moves may be masked if either your NNet architecture is insufficient or you've get overfitting or something else.
                 # If you have got dozens or hundreds of these messages you should pay attention to your NNet and/or training process.   
-                log.error("All valid moves were masked, doing a workaround.")
+                print("All valid moves were masked, doing a workaround.")
                 self.Ps[s] = self.Ps[s] + valids
                 self.Ps[s] /= np.sum(self.Ps[s])
 
@@ -123,8 +133,9 @@ class MCTS():
                     best_act = a
 
         a = best_act
+        # print("Best action:", a)
         # print("Getting next state:", self.game.stringRepresentation(canonicalBoard))
-        next_s, next_player = self.game.getNextState(canonicalBoard, 1, a) # DEBUG: I think what happens is that 
+        next_s, next_player = self.game.getNextState(canonicalBoard, 1, a) 
         next_s = self.game.getCanonicalForm(next_s, next_player)
 
         v = self.search(next_s)

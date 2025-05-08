@@ -19,7 +19,7 @@ args = dotdict({
         'tempThreshold': 15,
         'updateThreshold': 0.6,
         'maxlenOfQueue': 200000,
-        'numMCTSSims': 50,
+        'numMCTSSims': 20,
         'arenaCompare': 15,
         'cpuct': 1,
         'checkpoint': './temp/',
@@ -39,12 +39,13 @@ args = dotdict({
         "wandb_run_name": "test_run",
         "use_wandb": False, # Set to True to use wandb
         "dim": 80,
+        "numRandomSims": 20
     })
 
-human_vs_cpu = False # Set to True to play against the AI
+human_vs_cpu = True # Set to True to play against the AI
 
 # Instantiate PokerGame
-g = PokerGame(seed=42)
+g = PokerGame()
 
 # Instantiate Poker players
 rp = RandomPlayer(g).play
@@ -53,14 +54,18 @@ naive = NaivePlayer(g).play
 hp = HumanPokerPlayer(g).play
 
 
-model = NNet(g)
-neural_player = NNetPlayer(g, model, args).play
+model = NNet(g, args)
+model.load_checkpoint(os.environ["BASE_DIR"], "alpha-zero-general/pretrained_data/naive_pretrained_model.pth.tar")
+print(args.numMCTSSims)
+pi, v = model.predict(g.getCanonicalForm(g.getInitBoard(), 1))
+print("PredICT:", pi, v)
+neural_player = NNetPlayer(PokerGame(), model, args).play
 
 # nnet players
 n1 = NNet(g, args)
 # Comment out checkpoint loading as we likely don't have a pretrained Poker model yet
 # n1.load_checkpoint('./pretrained_models/poker/pytorch/','some_poker_model.pth.tar')
-args1 = dotdict({'numMCTSSims': 50, 'cpuct':1.0}) # Adjust sims as needed for Poker
+args1 = dotdict({'numMCTSSims': 10, 'cpuct':1.0}) # Adjust sims as needed for Poker
 args = dotdict(args1)
 print(args)
 args["numMCTSSims"] = 10
@@ -80,7 +85,7 @@ else:
     # player2 = n2p
 
     # Pit against Greedy player for now if not human
-    player2 = naive
+    player2 = neural_player
 
 # Define a display function for Poker (Arena expects a function)
 # Using stringRepresentation for now, might need adjustment based on Arena's needs
@@ -89,7 +94,7 @@ def display_poker_board(board):
     # print(g.stringRepresentation(board))
 
 # Pass the Poker game and display function to Arena
-arena = Arena.Arena(n1p, player2, g, display=display_poker_board)
+arena = Arena.Arena(neural_player, player2, g, display=display_poker_board)
 
 # Play games (e.g., 2 games)
 print(arena.playGames(2, verbose=True))

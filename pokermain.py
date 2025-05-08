@@ -17,18 +17,19 @@ from utils import *
 # 64 dim with larger numEps, batch size, and learning rate
 # Maybe the 96 dim with same params, but 25 mctssims? Only if have time
 # Tmrw ill start running with the most promising one in background
-run_name = "pretrained-80" # Change this to your desired run name
+
+# It doesnt make sense to see how this action will affect a future round that is independent except for knowing that risky hand choices lead to later losses
+run_name = "randomMCTS_dim100" # Change this to your desired run name
 args = dotdict({
-        'numIters': 10, # In all we should do at least 10_000 games
-        'numEps': 50, # Turn this up to like 50 at least
+        'numIters': 1000, # In all we should do at least 10_000 games
+        'numEps': 100,
         'tempThreshold': 15,
-        'updateThreshold': 0.5,
+        'updateThreshold': 0.55,
         'maxlenOfQueue': 200000,
-        'numMCTSSims': 10,
-        'arenaCompare': 30,
+        'numMCTSSims': 50,
+        'arenaCompare': 40,
         'cpuct': 1,
         'checkpoint': f'./temp-{run_name}/',
-        'load_model': False,
         'load_folder_file': ('alpha-zero-general/pretrained_data','naive_pretrained_model.pth.tar'),
         'numItersForTrainExamplesHistory': 20,
         "sendToHub": False,
@@ -37,7 +38,7 @@ args = dotdict({
         'lr': .00025, # Turn up lr for lower dimensions and batch sizes
         'dropout': 0.3,
         'epochs': 10,
-        'batch_size': 128, # probably increase batch size for final training
+        'batch_size': 256, # probably increase batch size for final training
         'cuda': False,
         'block_width': 256,
         'n_blocks': 1,
@@ -45,7 +46,9 @@ args = dotdict({
         "use_wandb": True, # Control wandb usage
         "wandb_project": "alpha-poker",
         "wandb_run_name": run_name, # Use this for the run name
-        "load_model": True, # Set to True if you want to load a model
+        "load_model": False, # Set to True if you want to load a model
+        "dim": 100,
+        "numRandomSims": 10,
     })
 
 
@@ -60,7 +63,7 @@ def main():
         )
 
     print('Loading %s...', Game.__name__)
-    g = Game(seed=50)
+    g = Game()
 
     print('Loading %s...', nn.__name__)
     nnet = nn(g, args)
@@ -73,10 +76,6 @@ def main():
 
     print('Loading the Coach...')
     c = Coach(g, nnet, args)
-
-    if args.load_model:
-        print("Loading 'trainExamples' from file...")
-        c.loadTrainExamples()
 
     print('Starting the learning process 🎉')
     c.learn()

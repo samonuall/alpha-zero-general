@@ -34,7 +34,6 @@ class NNetWrapper(NeuralNet):
         if a:
             args = a
 
-        print("Args: ", args)
         # Remove wandb.init() - Assume it's initialized externally
         if args.use_wandb:
             wandb.init(project="alpha-poker", name=args.wandb_run_name, config=args, reinit=True)
@@ -134,8 +133,8 @@ class NNetWrapper(NeuralNet):
             pi, v = self.nnet(state)
         
         # Need to scale back to actual values since rewards were scaled
-        scaled_v = v.cpu().numpy()[0] * 1000.0
-        return torch.exp(pi).cpu().numpy()[0], scaled_v
+        scaled_v = v.cpu().numpy()[0]
+        return torch.exp(pi).cpu().numpy()[0], scaled_v[0]
 
     def loss_pi(self, targets, outputs):
         return -torch.sum(targets * outputs) / targets.size()[0]

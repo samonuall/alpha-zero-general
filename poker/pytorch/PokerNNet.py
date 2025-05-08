@@ -25,12 +25,18 @@ class PokerNNet(nn.Module):
             hidden_dim = args.dim  # maybe do between this and 98 for main training, maybe like 80
         else:
             hidden_dim = 80
+        
+        dropout_rate = 0.1
+        if hasattr(args, 'dropout'):
+            dropout_rate = args.dropout
+            
         self.act = nn.SiLU()
 
         # input embedding
         self.fc_in = nn.Linear(input_size, hidden_dim)
         self.ln_in = nn.LayerNorm(hidden_dim) # commented out
         # self.bn_in = nn.BatchNorm1d(hidden_dim)
+        self.dropout_in = nn.Dropout(dropout_rate)
 
         # deeper with residuals
         self.blocks = nn.Sequential(
@@ -38,12 +44,15 @@ class PokerNNet(nn.Module):
             ResBlock(hidden_dim),
             ResBlock(hidden_dim),
         )
+        self.dropout_blocks = nn.Dropout(dropout_rate)
 
         # policy head
+        self.dropout_pi = nn.Dropout(dropout_rate)
         self.pi_h   = nn.Linear(hidden_dim, 64)
         self.pi_out = nn.Linear(64, action_size)
 
         # value head
+        self.dropout_v = nn.Dropout(dropout_rate)
         self.v_h   = nn.Linear(hidden_dim, 64)
         self.v_out = nn.Linear(64, 1)
 
@@ -51,17 +60,22 @@ class PokerNNet(nn.Module):
         # input → hidden_dim
         x = self.act(self.ln_in(self.fc_in(x))) # commented out
         # x = self.act(self.bn_in(self.fc_in(x)))
+        x = self.dropout_in(x)
 
         # depth via residuals
         x = self.blocks(x)
+        x = self.dropout_blocks(x)
 
         # policy
-        pi = self.act(self.pi_h(x))
+        pi = self.dropout_pi(x)
+        pi = self.act(self.pi_h(pi))
         pi = self.pi_out(pi)
         pi = F.log_softmax(pi, dim=-1)
 
         # value
-        v = self.act(self.v_h(x))
+        v = self.dropout_v(x)
+        v = self.act(self.v_h(v))
         v = self.v_out(v)
+        v = torch.tanh(v)
 
         return pi, v

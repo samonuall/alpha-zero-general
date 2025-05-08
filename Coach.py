@@ -19,6 +19,8 @@ import utils
 from pickle import Pickler
 import wandb # Add wandb import
 
+from poker.PokerGame import PokerGame
+
 log = logging.getLogger(__name__)
 
 # monkey patch prints with logging
@@ -34,18 +36,12 @@ builtins.print = print_with_log
 # Needed so that arena can do parallel computation
 class MCTSPlayer:
     def __init__(self, game, nnet, args):
-        # Create copy of args with smaller sims
-        new_args = {}
-        for k, v in args.items():
-            if k == "numMCTSSims":
-                new_args[k] = 20
-            else:
-                new_args[k] = v
-        new_args = utils.dotdict(new_args)
-        self.mcts = MCTS(game, nnet, new_args)
+        self.nnet = nnet
+        self.args = args
     
     def __call__(self, x, temp=0):
-        return np.argmax(self.mcts.getActionProb(x, temp=temp))
+        mcts = MCTS(PokerGame(max_round=x.emulator_state["round_count"]), self.nnet, self.args)
+        return np.argmax(mcts.getActionProb(x, temp=temp))
 
 
 class Coach():
@@ -59,7 +55,7 @@ class Coach():
         self.nnet = nnet
         self.pnet = self.nnet.__class__(self.game, args)  # the competitor network
         self.args = args
-        self.mcts = MCTS(self.game, self.nnet, self.args)
+        self.mcts = MCTS(PokerGame(), self.nnet, self.args)
         self.trainExamplesHistory = []  # history of examples from args.numItersForTrainExamplesHistory latest iterations
         self.skipFirstSelfPlay = False  # can be overriden in loadTrainExamples()
 
@@ -89,7 +85,11 @@ class Coach():
             canonicalBoard = self.game.getCanonicalForm(board, self.curPlayer)
             temp = int(episodeStep < self.args.tempThreshold)
 
-            pi = self.mcts.getActionProb(canonicalBoard, temp=temp)
+            # ToDO: only do mcts search for this round, not ahead of that (change max rounds here?)
+            print("Finding action prob...")
+            mcts = MCTS(PokerGame(max_round=canonicalBoard.emulator_state["round_count"]), self.nnet, self.args)
+            pi = mcts.getActionProb(canonicalBoard, temp=temp)
+            print("DONE")
             sym = self.game.getSymmetries(canonicalBoard, pi)
             for b, p in sym:
                 trainExamples.append([b, self.curPlayer, p, None])
@@ -261,6 +261,7 @@ class Coach():
                 canonicalBoard = game.getCanonicalForm(board, curPlayer)
                 temp = int(episodeStep < args.tempThreshold)
                 
+                mcts = MCTS(PokerGame(max_round=canonicalBoard.emulator_state["round_count"]), nnet, args)
                 pi = mcts.getActionProb(canonicalBoard, temp=temp)
                 sym = game.getSymmetries(canonicalBoard, pi)
                 
